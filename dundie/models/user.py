@@ -1,6 +1,7 @@
 from pydantic import BaseModel, root_validator
 from typing import Optional
-from sqlmodel import SQLModel, Field
+from sqlmodel import SQLModel, Session, select, Field
+from dundie.db import engine
 from dundie.security import HashedPassword
 
 
@@ -26,6 +27,12 @@ class User(SQLModel, table=True):
 def generate_username(name: str) -> str:
     """Generates a slug username from a name"""
     return name.lower().replace(" ", "-")
+
+
+def get_user(username: str) -> Optional[User]:
+    query = select(User).where(User.username == username)
+    with Session(engine) as session:
+        return session.exec(query).first()
 
 
 class UserResponse(BaseModel):
