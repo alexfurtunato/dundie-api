@@ -1,10 +1,12 @@
 from pydantic import BaseModel, root_validator
-from typing import Optional
-from sqlmodel import SQLModel, Session, select, Field
+from typing import Optional, TYPE_CHECKING
+from sqlmodel import SQLModel, Session, select, Field, Relationship
 from dundie.db import engine
 from dundie.security import HashedPassword, get_password_hash
 from fastapi import HTTPException, status
 
+if TYPE_CHECKING:
+    from dundie.models.transaction import Transaction, Balance
 
 class User(SQLModel, table=True):
     """ User model """
@@ -18,6 +20,28 @@ class User(SQLModel, table=True):
     bio: Optional[str] = None
     dept: Optional[str] = Field(nullable=False)
     currency: Optional[str] = Field(nullable=False)
+
+    incomes: Optional[list["Transaction"]] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"primaryjoin": 'User.id == Transaction.user_id'}
+    )
+
+    expenses: Optional[list["Transaction"]] = Relationship(
+        back_populates="from_user",
+        sa_relationship_kwargs={"primaryjoin": 'User.id == Transaction.from_id'}
+    )
+
+    _balance: Optional["Balance"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"lazy": "dynamic"}
+    )
+
+    @property
+    def balance(self) -> int:
+        """Returns the current balance of the user"""
+        if (user_balance := self._balance.first()) is not None:
+            return user_balance.value
+        return 0
 
     @property
     def superuser(self):
