@@ -1,12 +1,13 @@
 from typing import List
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Body, BackgroundTasks
 from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
 
-from dundie.models.user import User, UserResponse, UserRequest
+from dundie.models.user import User, UserResponse, UserRequest, UserProfilePatchRequest, UserPasswordPatchRequest
 from dundie.db import ActiveSession
-from dundie.auth import AuthenticatedUser, AuthenticatedSuperUser
+from dundie.auth import AuthenticatedUser, AuthenticatedSuperUser, CanChangeUserPassword
+from dundie.tasks.user import try_to_send_pwd_reset_email
 
 router = APIRouter()
 
@@ -54,3 +55,55 @@ async def create_user(
         )
     session.refresh(db_user)
     return db_user
+
+
+@router.patch("/{username}/")
+async def update_user(
+    *,
+    session: Session = ActiveSession,
+    patch_data: UserProfilePatchRequest,
+    current_user: User = AuthenticatedUser,
+    username: str
+) -> UserResponse:
+    user = session.exec(select(User).where(User.username == username)).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if user.id != current_user.id and not current_user.superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only update your own profle")
+    
+    # Update
+    user.avatar = patch_data.avatar
+    user.bio = patch_data.bio
+
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+# @router.post("/{username}/password/", dependencies=[AuthenticatedUser])
+@router.post("/{username}/password/")
+async def change_password(
+    *,
+    session: Session = ActiveSession,
+    patch_data: UserPasswordPatchRequest,
+    user: User = CanChangeUserPassword
+) -> UserResponse:
+    user.password = patch_data.hashed_password  
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+@router.post("/pwd_reset_token/")
+async def send_password_reset_token(
+    *, 
+    email: str = Body(embed=True),
+    background_tasks: BackgroundTasks):
+    """Sends an email with the token to reset password."""
+    background_tasks.add_task(
+        try_to_send_pwd_reset_email, email=email
+    )
+    return {
+        "message": "If we found a user with that email, we sent a password reset token to it."
+    }
