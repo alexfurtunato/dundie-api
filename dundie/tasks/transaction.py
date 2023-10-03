@@ -1,5 +1,5 @@
 from typing import Optional
-from sqlmodel import Session
+from sqlmodel import Session, select
 from dundie.db import engine
 from dundie.models import User, Transaction, Balance
 
@@ -22,11 +22,16 @@ def add_transaction(
         from_user: The user where amount is coming from os superuser.
         value: The value being added
     """
-    if not from_user.superuser and from_user.balance < value:
-        raise TransactionError("Insufficient balance")
     
     session = session or Session(engine)
 
+    # TODO: Está dando erro quando usa o from_user pq a opracao com lay field diz q
+    # o objeto está desconectado da sessão. O que não faz sentido.
+    from_user = session.exec(select(User).where(User.id==from_user.id)).first()
+
+    if not from_user.superuser and from_user.balance < value:
+        raise TransactionError("Insufficient balance")
+    
     transaction = Transaction(user=user, from_user=from_user, value=value)
     session.add(transaction)
     session.commit()  # HERE BE THE DRAGONS!!!

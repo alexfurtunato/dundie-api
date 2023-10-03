@@ -80,7 +80,6 @@ async def update_user(
     session.refresh(user)
     return user
 
-# @router.post("/{username}/password/", dependencies=[AuthenticatedUser])
 @router.post("/{username}/password/")
 async def change_password(
     *,
