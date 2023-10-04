@@ -70,6 +70,15 @@ class UserResponse(BaseModel):
     currency: str
 
 
+class UserResponseWithBalance(UserResponse):
+    balance: Optional[int] =  None
+
+    @root_validator(pre=True)
+    def set_balance(cls, values):
+        instance = values['_sa_instance_state'].object  # Instrospeccao do SQLAlchemy para evitar fazer nova query com session
+        values['balance'] = instance.balance
+        return values
+
 class UserRequest(BaseModel):
     """Serializer for User request payload"""
     name: str
