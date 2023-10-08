@@ -103,6 +103,12 @@ class UserProfilePatchRequest(BaseModel):
     avatar: Optional[str] = None
     bio: Optional[str] = None
 
+    @root_validator(pre=True)
+    def ensure_values(cls, values):
+        if not values:
+            raise HTTPException(status_code=400, detail="Bad request, no data informed")
+        return values
+
 
 class UserPasswordPatchRequest(BaseModel):
     password: str
